@@ -153,6 +153,13 @@ button.row:active,.row.tap:active{background:var(--cell-hi)}
 .empty .h{font-weight:600}
 .empty .p{font-size:15px;color:var(--label2);max-width:32ch}
 #map{height:min(62vh,520px);border-radius:12px;overflow:hidden;background:var(--cell)}
+.pickbar{gap:8px;flex-wrap:wrap}
+#pickMap{position:relative;height:min(46vh,380px);border-radius:12px;overflow:hidden;background:var(--cell)}
+#pickMap .pin{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;z-index:500;pointer-events:none;
+  border:2.5px solid #fff;border-radius:50%;box-shadow:0 0 0 1.5px rgba(0,0,0,.35),inset 0 0 0 1.5px rgba(0,0,0,.35)}
+#pickMap .pin::before,#pickMap .pin::after{content:"";position:absolute;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
+#pickMap .pin::before{left:50%;top:-9px;bottom:-9px;width:2px;margin-left:-1px}
+#pickMap .pin::after{top:50%;left:-9px;right:-9px;height:2px;margin-top:-1px}
 .leaflet-container{font:13px var(--font)}
 
 /* ---------- SEGNALE ---------- */
@@ -350,6 +357,15 @@ dialog.sheet::backdrop{background:rgba(0,0,0,.4);animation:dim .3s ease}
     <div class="group">
       <div class="row"><textarea id="fPaste" rows="2" placeholder="Incolla coordinate o link, es. 42.9493, 12.3995" aria-label="Coordinate o link"></textarea></div>
       <div class="row"><span class="verdict mid" id="fParsed">Accetta decimali, link di Google Maps e gradi° primi′ secondi″</span></div>
+      <div class="row pickbar"><button class="pillbtn" id="fClip" type="button">Incolla</button><button class="pillbtn" id="fPickBtn" type="button">Scegli sulla mappa</button></div>
+    </div>
+    <div id="pick" hidden>
+      <div class="seg" id="pickSeg" role="tablist" style="margin-top:12px">
+        <button role="tab" data-l="sat" aria-selected="true" type="button">Satellite</button>
+        <button role="tab" data-l="map" aria-selected="false" type="button">Mappa</button>
+      </div>
+      <div id="pickMap"><div class="pin" aria-hidden="true"></div></div>
+      <p class="gf">Sposta la mappa finché il mirino è sul traliccio. Le coordinate si aggiornano da sole.</p>
     </div>
     <div class="gh">Sito</div>
     <div class="group">
@@ -456,8 +472,16 @@ function parseCoords(txt){
   let m;
   const ql=t.match(/(?:^|[?&#,;\s])(?:lat|latitude)=(-?\d+(?:\.\d+)?)/i), qo=t.match(/(?:^|[?&#,;\s])(?:lon|lng|long|longitude)=(-?\d+(?:\.\d+)?)/i);
   if(ql&&qo)return chk(+ql[1],+qo[1]);
+  // link: prima la destinazione, poi il resto (saddr/sll sono la posizione di chi condivide)
+  const P=String.raw`=(?:loc:)?\s*(-?\d+\.\d+)\s*[ ,+]\s*(-?\d+\.\d+)`;
+  for(const k of ["daddr","destination","coordinate","ll","q","query","center","address","sll","saddr"])
+    if((m=t.match(new RegExp(`[?&]${k}${P}`,"i"))))return chk(+m[1],+m[2]);
+  if((m=t.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/)))return chk(+m[1],+m[2]);
   if((m=t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)))return chk(+m[1],+m[2]);
-  if((m=t.match(/[?&](?:q|query|ll|center|destination)=(-?\d+\.\d+)[ ,+]+(-?\d+\.\d+)/)))return chk(+m[1],+m[2]);
+  if((m=t.match(/geo:(-?\d+\.\d+),(-?\d+\.\d+)/i)))return chk(+m[1],+m[2]);
+  // gradi decimali con emisfero, come nella scheda di Mappe: 42,94930° N, 12,39950° E
+  if((m=t.match(/(\d{1,3}(?:[.,]\d+)?)\s*°\s*([NS])\s*[,;\s]\s*(\d{1,3}(?:[.,]\d+)?)\s*°\s*([EWO])/i))&&/[.,]\d/.test(m[1]))
+    return chk(+m[1].replace(",",".")*(/S/i.test(m[2])?-1:1),+m[3].replace(",",".")*(/[WO]/i.test(m[4])?-1:1));
   if((m=t.match(/#map=\d+\/(-?\d+\.\d+)\/(-?\d+\.\d+)/)))return chk(+m[1],+m[2]);
   const dms=[...t.matchAll(/(\d{1,3})\s*[°º]\s*(\d{1,2})?\s*['′’]?\s*(\d{1,2}(?:[.,]\d+)?)?\s*(?:["″”]|'')?\s*([NSEWO])/gi)];
   if(dms.length>=2){const v=dms.slice(0,2).map(x=>{let d=+x[1]+(+(x[2]||0))/60+(+String(x[3]||0).replace(",","."))/3600;if(/[SWO]/i.test(x[4]))d=-d;return{d,ax:/[NS]/i.test(x[4])?"lat":"lon"}});
@@ -667,15 +691,53 @@ function openSite(t){
   $("#fPaste").value=t?`${t.lat}, ${t.lon}`:""; $("#fEnb").value=t?.enb??""; $("#fName").value=t?.name??"";
   $("#fOp").value=t?.op??"TIM"; $("#fBand").value=t?.band??""; $("#fH").value=t?.h??""; $("#fGround").value=t?.ground??""; $("#fSector").value=t?.sector??"";
   $("#fDelWrap").hidden=!t; $("#fDel").textContent="Elimina sito"; delete $("#fDel").dataset.c;
+  $("#pick").hidden=true; $("#fPickBtn").textContent="Scegli sulla mappa";
   showParsed(); $("#sheetSite").showModal();
 }
+const HINT="Incolla il link di «Avvia navigatore» (tienilo premuto → Copia link), un link di Mappe o Google Maps, oppure le coordinate";
 function showParsed(){
   const v=$("#fPaste").value, c=parseCoords(v), el=$("#fParsed");
   el.className="verdict "+(c?"ok":v?"bad":"mid");
-  el.textContent=c?`${NF(c.lat,6)}, ${NF(c.lon,6)}`:v?"Coordinate non riconosciute":"Accetta decimali, link di Google Maps e gradi° primi′ secondi″";
+  el.textContent=c?`${NF(c.lat,6)}, ${NF(c.lon,6)}`:v?(/maps\.apple\/p\/|goo\.gl|maps\.app/i.test(v)?"Link breve senza coordinate: usa «Scegli sulla mappa»":"Coordinate non riconosciute"):HINT;
   if(!$("#fEnb").value){const m=v.match(/\b(\d{5})\b(?![.,]\d)/);if(m&&!c)$("#fEnb").value=m[1]}
+  return c;
 }
-$("#fPaste").addEventListener("input",showParsed);
+$("#fPaste").addEventListener("input",()=>{const c=showParsed();if(c&&pickMap&&!$("#pick").hidden)pickGo(c.lat,c.lon,Math.max(pickMap.getZoom(),17))});
+$("#fClip").onclick=async()=>{
+  try{const t=await navigator.clipboard.readText();if(!t){hud("Gli appunti sono vuoti",true);return}
+    $("#fPaste").value=t.trim();const c=showParsed();
+    if(c&&pickMap&&!$("#pick").hidden)pickGo(c.lat,c.lon,17);
+    if(!c)hud("Negli appunti non ci sono coordinate",true)}
+  catch(e){$("#fPaste").focus();hud("Tieni premuto nel campo e scegli Incolla",true)}
+};
+
+/* ---------- scelta sulla mappa ---------- */
+let pickMap=null, pickLayers=null, pickMarks=null, pickSilent=false;
+function pickGo(lat,lon,z){pickSilent=true;pickMap.setView([lat,lon],z,{animate:false});pickSilent=false}
+$("#fPickBtn").onclick=()=>{
+  const box=$("#pick"); box.hidden=!box.hidden; $("#fPickBtn").textContent=box.hidden?"Scegli sulla mappa":"Nascondi mappa";
+  if(box.hidden)return;
+  if(typeof L==="undefined"){box.hidden=true;hud("La mappa richiede la connessione",true);return}
+  if(!pickMap){
+    pickMap=L.map("pickMap",{zoomControl:false,attributionControl:true});
+    pickLayers={sat:L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:20,maxNativeZoom:19,attribution:"© Esri, Maxar"}),
+      map:L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:20,maxNativeZoom:19,attribution:"© OpenStreetMap"})};
+    pickLayers.sat.addTo(pickMap); pickMarks=L.layerGroup().addTo(pickMap);
+    pickMap.on("moveend",()=>{if(pickSilent)return;const c=pickMap.getCenter();$("#fPaste").value=`${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}`;showParsed()});
+  }
+  pickMarks.clearLayers(); const p=pos(), tint=getComputedStyle(document.documentElement).getPropertyValue("--tint").trim();
+  if(p)L.circleMarker([p.lat,p.lon],{radius:8,color:"#fff",weight:3,fillColor:tint,fillOpacity:1}).bindTooltip("Router").addTo(pickMarks);
+  for(const t of S.towers)if(t.id!==editId)L.circleMarker([t.lat,t.lon],{radius:6,color:"#fff",weight:2,fillColor:"#8E8E93",fillOpacity:1}).bindTooltip(siteName(t)).addTo(pickMarks);
+  const c=parseCoords($("#fPaste").value);
+  if(!pickMap._loaded)pickGo(42.5,12.5,6);
+  setTimeout(()=>{pickMap.invalidateSize(false);
+    pickGo(c?c.lat:p?p.lat:42.5,c?c.lon:p?p.lon:12.5,c?17:p?14:6);   // centrare sul router non scrive nel campo
+    box.scrollIntoView({behavior:"smooth",block:"nearest"})},60);
+};
+$$("#pickSeg button").forEach(b=>b.onclick=()=>{
+  $$("#pickSeg button").forEach(x=>x.setAttribute("aria-selected",x===b));
+  for(const k in pickLayers)pickMap.removeLayer(pickLayers[k]); pickLayers[b.dataset.l].addTo(pickMap);
+});
 $("#ssSave").onclick=()=>{
   const c=parseCoords($("#fPaste").value); if(!c){hud("Inserisci coordinate valide",true);$("#fPaste").focus();return}
   const t={id:editId||Math.random().toString(36).slice(2,9),lat:c.lat,lon:c.lon,enb:num($("#fEnb").value),name:$("#fName").value.trim(),op:$("#fOp").value,
@@ -812,6 +874,10 @@ let hudT;function hud(m,warn){const h=$("#hud");$("#hudTxt").textContent=m;h.que
 buildDial(); initSettings(); renderStatic(); renderLog(); showTab(S.tab||"punta");
 requestAnimationFrame(tick); beepLoop();
 if(!window.isSecureContext)setTimeout(()=>hud("Apri Mira in HTTPS per usare GPS e bussola",true),800);
+// ?add=<link o coordinate>&name=… apre un nuovo sito già compilato
+(()=>{const q=new URLSearchParams(location.search), a=q.get("add"); if(a==null)return;
+  history.replaceState(null,"",location.pathname); showTab("siti"); openSite();
+  $("#fPaste").value=a; if(q.get("name"))$("#fName").value=q.get("name"); if(q.get("enb"))$("#fEnb").value=q.get("enb"); showParsed()})();
 </script>
 </body>
 </html>

@@ -34,11 +34,19 @@ icons/                 icona, favicon, apple-touch-icon
 
 ## Come si usa
 
-1. Su LTE Italy apri il sito del ripetitore, copia le coordinate (o il link della mappa) e incollale in **Aggiungi ripetitore**. Formati accettati:
-   - `41.902782, 12.496366`
-   - link di Google Maps (`…/@45.0703,7.6869,17z`)
+1. Aggiungi il ripetitore in **Siti → +**. Hai tre modi:
+   - **Link del navigatore**: su LTE Italy, invece di toccare "Avvia navigatore", tienilo premuto, scegli **Copia link** e poi tocca **Incolla** in Mira.
+   - **Da Mappe**: se si è già aperta Apple Mappe, tocca il segnaposto e usa Condividi → Copia, oppure copia le coordinate dalla scheda in basso.
+   - **Scegli sulla mappa**: con la vista satellite sposti la mappa finché il mirino non è sul traliccio che vedi su LTE Italy.
+
+   Formati accettati:
+   - `41.902782, 12.496366`, oppure `42,9493° N, 12,3995° E`
+   - link di Apple Mappe (`ll=`, `daddr=`, `coordinate=`), di Google Maps (`@…`, `destination=`, `!3d…!4d…`) e `geo:`
    - gradi, primi e secondi: `45°04'12.3"N 7°41'10"E`
    - link con `lat=…&lon=…`
+
+   I link brevi (`maps.apple/p/…`, `maps.app.goo.gl/…`) non contengono le coordinate: per quelli usa la mappa.
+   Puoi anche aprire `…/mira/?add=<link o coordinate>&enb=58112` per avere il sito già compilato.
 2. Sul tetto premi **Avvia sensori** e consenti l'accesso a posizione e sensori di movimento.
 3. Prima di iniziare, calibra la bussola muovendo il telefono a "8".
 4. Appoggia il telefono sul router e ruotalo finché non compare **✓ Allineato**.
