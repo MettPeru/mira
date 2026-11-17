@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mira</title>
+<meta name="description" content="Punta il router 5G verso il ripetitore giusto.">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Mira">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* Layout: app a schede in stile iOS — Punta (bussola), Siti, Segnale, Impostazioni; liste raggruppate e fogli modali */
+:root{
+  --bg:#F2F2F7; --cell:#FFFFFF; --cell-hi:#E5E5EA; --fill:rgba(118,118,128,.12); --seg-on:#FFFFFF;
+  --label:#000000; --label2:rgba(60,60,67,.6); --label3:rgba(60,60,67,.3); --sep:rgba(60,60,67,.2);
+  --tint:#EE6410; --good:#34C759; --warn:#FF9500; --bad:#FF3B30; --target:#FFB800;
+  --bar:rgba(249,249,249,.8); --dial:#FFFFFF; --tick:rgba(60,60,67,.32); --tick-major:#1C1C1E;
+  --shadow:0 1px 0 rgba(0,0,0,.02),0 8px 24px rgba(0,0,0,.06);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,"Segoe UI",Roboto,sans-serif;
+  --font-d:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",system-ui,"Segoe UI",Roboto,sans-serif;
+  --font-r:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Inter",system-ui,sans-serif;
+  --gutter-l:max(16px,env(safe-area-inset-left,0px)); --gutter-r:max(16px,env(safe-area-inset-right,0px));
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#000000; --cell:#1C1C1E; --cell-hi:#2C2C2E; --fill:rgba(118,118,128,.24); --seg-on:#636366;
+  --label:#FFFFFF; --label2:rgba(235,235,245,.6); --label3:rgba(235,235,245,.3); --sep:rgba(84,84,88,.6);
+  --tint:#FF8A3D; --good:#30D158; --warn:#FF9F0A; --bad:#FF453A; --target:#FFD60A;
+  --bar:rgba(22,22,23,.78); --dial:#0C0C0D; --tick:rgba(235,235,245,.3); --tick-major:#FFFFFF;
+  --shadow:none; color-scheme:dark}}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--label);font:17px/1.3 var(--font);letter-spacing:-.022em;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overscroll-behavior-y:none}
+button,input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--tint);outline-offset:2px;border-radius:8px}
+.num{font-variant-numeric:tabular-nums}
+svg{display:block}
+
+/* ---------- schermate ---------- */
+.view{display:none;max-width:620px;margin:0 auto;
+  padding:calc(env(safe-area-inset-top,0px) + 8px) var(--gutter-r) calc(100px + env(safe-area-inset-bottom,0px)) var(--gutter-l)}
+.view.on{display:block;animation:fade .22s ease}
+@keyframes fade{from{opacity:.4}to{opacity:1}}
+.navbar{display:flex;align-items:center;justify-content:flex-end;min-height:44px;gap:8px}
+.largetitle{font:700 34px/1.12 var(--font-d);letter-spacing:.012em;margin:2px 0 14px;text-wrap:balance}
+.navbtn{background:none;border:0;color:var(--tint);font-size:17px;padding:8px 4px;display:inline-flex;align-items:center;gap:4px}
+.navbtn svg{width:24px;height:24px}
+
+/* ---------- liste raggruppate ---------- */
+.gh{font-size:13px;line-height:18px;color:var(--label2);text-transform:uppercase;letter-spacing:-.005em;margin:26px 16px 7px}
+.gf{font-size:13px;line-height:18px;color:var(--label2);margin:7px 16px 0;letter-spacing:-.005em}
+.group{background:var(--cell);border-radius:12px;overflow:hidden}
+.row{position:relative;display:flex;align-items:center;gap:12px;min-height:44px;padding:11px 16px;width:100%;
+  background:none;border:0;text-align:left;color:inherit}
+.row+.row::before{content:"";position:absolute;top:0;right:0;left:16px;height:1px;transform:scaleY(.5);transform-origin:top;background:var(--sep)}
+.group.inset-icons .row+.row::before{left:60px}
+button.row:active,.row.tap:active{background:var(--cell-hi)}
+.row .k{flex:none}
+.row .v{margin-left:auto;color:var(--label2);text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row input,.row select{flex:1;min-width:0;border:0;background:transparent;text-align:right;color:var(--label2);padding:0;outline:none}
+.row input::placeholder{color:var(--label3)}
+.row select{appearance:none;-webkit-appearance:none;direction:rtl}
+.row textarea{width:100%;border:0;background:transparent;resize:none;outline:none;padding:0;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:15px;line-height:1.4}
+.row.action{color:var(--tint);justify-content:center}
+.row.action.left{justify-content:flex-start}
+.row.destructive{color:var(--bad);justify-content:center}
+.chev{width:8px;height:13px;flex:none;color:var(--label3)}
+.ico{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;flex:none;color:#fff}
+.ico svg{width:18px;height:18px}
+
+/* ---------- controllo segmentato ---------- */
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--fill);border-radius:9px;padding:2px;margin-bottom:6px}
+.seg button{border:0;background:transparent;border-radius:7px;font-size:13px;font-weight:500;padding:6px 8px;letter-spacing:-.005em;transition:background .2s}
+.seg button[aria-selected="true"]{background:var(--seg-on);box-shadow:0 3px 8px rgba(0,0,0,.12),0 3px 1px rgba(0,0,0,.04);font-weight:600}
+
+/* ---------- PUNTA ---------- */
+.target-head{display:flex;align-items:flex-start;gap:12px;margin:2px 0 6px}
+.target-head .tt{min-width:0;flex:1}
+.eyebrow{font-size:13px;font-weight:600;color:var(--tint);letter-spacing:-.005em;display:flex;align-items:center;gap:6px}
+.tname{font:700 28px/1.14 var(--font-d);letter-spacing:.01em;margin:2px 0 2px;overflow-wrap:anywhere}
+.tsub{font-size:15px;color:var(--label2)}
+.hero{display:grid;justify-items:center;gap:6px;margin-top:4px}
+.readout{display:flex;align-items:baseline;gap:10px;font-variant-numeric:tabular-nums}
+.readout .deg{font:200 72px/1 var(--font-d);letter-spacing:-.035em}
+.readout .card{font:500 24px/1 var(--font-d);color:var(--label2);min-width:2.2ch}
+#dial{width:min(86vw,360px);height:auto;max-width:100%;touch-action:manipulation}
+.d-bg{fill:var(--dial)}
+.d-rim{fill:none;stroke:var(--sep);stroke-width:1}
+.t-min{stroke:var(--tick);stroke-width:1}
+.t-mid{stroke:var(--tick);stroke-width:1.6}
+.t-maj{stroke:var(--tick-major);stroke-width:2.2}
+.d-num{fill:var(--label2);font:500 12px var(--font);letter-spacing:0}
+.d-card{fill:var(--label);font:600 20px var(--font-d);letter-spacing:0}
+.d-north{fill:var(--bad)}
+.d-cross{stroke:var(--label3);stroke-width:1.2}
+.d-lubber{stroke:var(--label);stroke-width:4;stroke-linecap:round;transition:stroke .2s}
+.d-arc{fill:none;stroke:var(--tint);stroke-width:7;stroke-linecap:round;opacity:.9}
+.d-tgt-halo{fill:var(--dial)}
+.d-tgt{fill:var(--target)}
+.d-tgt-core{fill:var(--dial)}
+.d-wedge{fill:var(--good);opacity:.16}
+#dial.aligned .d-lubber{stroke:var(--good)}
+#dial.aligned .d-arc{stroke:var(--good)}
+#cardG{transition:transform .06s linear}
+
+.guide{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:10px 20px;border-radius:99px;border:0;
+  background:var(--fill);font:600 17px/1.2 var(--font);color:var(--label);transition:background .25s,color .25s}
+.guide svg{width:20px;height:20px}
+.guide.ok{background:var(--good);color:#fff}
+.guide.near{color:var(--warn)}
+.guide.primary{background:var(--tint);color:#fff}
+.guide.link{color:var(--tint)}
+
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+.tile{background:var(--cell);border-radius:16px;padding:12px 14px 13px;box-shadow:var(--shadow);min-width:0}
+.tile .k{font-size:13px;color:var(--label2);display:flex;align-items:center;gap:5px}
+.tile .v{font:600 24px/1.15 var(--font-r);font-variant-numeric:tabular-nums;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .v small{font-size:15px;font-weight:500;color:var(--label2);margin-left:2px}
+.notice{display:flex;gap:10px;align-items:flex-start;background:var(--cell);border-radius:14px;padding:12px 14px;margin-top:10px;font-size:15px;line-height:1.35;box-shadow:var(--shadow)}
+.notice svg{width:20px;height:20px;flex:none;color:var(--warn);margin-top:1px}
+.notice b{font-weight:600}
+.roundbtns{display:flex;gap:12px;justify-content:center;margin-top:16px}
+.rb{display:grid;justify-items:center;gap:5px;background:none;border:0;font-size:12px;color:var(--label2);letter-spacing:-.005em}
+.rb span{width:52px;height:52px;border-radius:50%;background:var(--cell);display:grid;place-items:center;color:var(--tint);box-shadow:var(--shadow);transition:background .2s,color .2s}
+.rb svg{width:24px;height:24px}
+.rb[aria-pressed="true"] span{background:var(--tint);color:#fff}
+
+/* ---------- SITI ---------- */
+.badge{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;flex:none;color:#fff;font:700 12px/1 var(--font);letter-spacing:0}
+.op-TIM{background:#1E4FD8}.op-Vodafone{background:#E60000}.op-WindTre{background:#FF6A00}.op-Iliad{background:#C8102E}.op-Fastweb{background:#F7C600;color:#111}.op-Altro{background:#8E8E93}
+.site .txt{min-width:0;flex:1}
+.site .t{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.site .s{font-size:14px;color:var(--label2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.site .check{width:20px;height:20px;color:var(--tint);flex:none}
+.site .info{background:none;border:0;padding:6px;margin:-6px -6px -6px 0;color:var(--tint);flex:none}
+.site .info svg{width:22px;height:22px}
+.empty{display:grid;justify-items:center;text-align:center;gap:8px;padding:28px 20px}
+.empty svg{width:44px;height:44px;color:var(--label3)}
+.empty .h{font-weight:600}
+.empty .p{font-size:15px;color:var(--label2);max-width:32ch}
+#map{height:min(62vh,520px);border-radius:12px;overflow:hidden;background:var(--cell)}
+.leaflet-container{font:13px var(--font)}
+
+/* ---------- SEGNALE ---------- */
+.verdict{font-size:15px;font-weight:500}
+.verdict.ok{color:var(--good)} .verdict.bad{color:var(--bad)} .verdict.mid{color:var(--label2)}
+.reading .az{font:600 22px/1 var(--font-r);font-variant-numeric:tabular-nums;min-width:62px}
+.reading .vals{font-size:14px;color:var(--label2);font-variant-numeric:tabular-nums;min-width:0;flex:1;line-height:1.35}
+.reading .vals b{color:var(--label);font-weight:500}
+.reading .vals span{white-space:nowrap}
+.pillbtn{border:0;border-radius:99px;background:var(--fill);color:var(--tint);font-size:15px;font-weight:600;padding:6px 12px;flex:none}
+.star{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--good);border-radius:5px;padding:2px 5px;margin-left:6px;vertical-align:2px;letter-spacing:0}
+
+/* ---------- barra schede ---------- */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--bar);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
+  border-top:.5px solid var(--sep);padding:6px var(--gutter-r) calc(env(safe-area-inset-bottom,0px) + 4px) var(--gutter-l)}
+.tabbar .in{max-width:620px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+.tab{background:none;border:0;display:grid;justify-items:center;gap:2px;padding:2px 0 4px;color:#8E8E93;font-size:10.5px;font-weight:500;letter-spacing:.01em}
+.tab svg{width:27px;height:27px}
+.tab[aria-selected="true"]{color:var(--tint)}
+
+/* ---------- fogli modali ---------- */
+dialog.sheet{border:0;padding:0;margin:auto auto 0;width:100%;max-width:620px;max-height:94dvh;background:var(--bg);color:var(--label);
+  border-radius:14px 14px 0 0;overflow:hidden;display:flex;flex-direction:column}
+dialog.sheet:not([open]){display:none}
+dialog.sheet[open]{animation:up .34s cubic-bezier(.2,.9,.25,1)}
+dialog.sheet::backdrop{background:rgba(0,0,0,.4);animation:dim .3s ease}
+@keyframes up{from{transform:translateY(100%)}to{transform:none}}
+@keyframes dim{from{opacity:0}}
+.grabber{width:36px;height:5px;border-radius:3px;background:var(--label3);margin:6px auto 0;flex:none}
+.sheet-h{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:4px 8px;min-height:52px;flex:none}
+.sheet-h .ti{font-weight:600;text-align:center}
+.sheet-h .navbtn:last-child{justify-self:end;font-weight:600}
+.sheet-h .navbtn:first-child{justify-self:start}
+.sheet-b{overflow-y:auto;padding:0 var(--gutter-r) calc(28px + env(safe-area-inset-bottom,0px)) var(--gutter-l);-webkit-overflow-scrolling:touch}
+.sheet-b>.gh:first-child{margin-top:8px}
+
+/* ---------- notifica ---------- */
+#hud{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 10px);transform:translate(-50%,-140%);z-index:50;
+  background:var(--cell);color:var(--label);box-shadow:0 10px 30px rgba(0,0,0,.18);border-radius:99px;padding:11px 18px;
+  font-size:15px;font-weight:500;max-width:calc(100vw - 32px);transition:transform .35s cubic-bezier(.2,.9,.25,1);display:flex;gap:8px;align-items:center}
+#hud.show{transform:translate(-50%,0)}
+#hud svg{width:18px;height:18px;color:var(--good);flex:none}
+
+@media (max-width:360px){.readout .deg{font-size:60px}.tile .v{font-size:21px}}
+@media (prefers-reduced-motion:reduce){*,*::before{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- simboli -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-target" viewBox="0 0 28 28"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="14" cy="14" r="9"/><path d="M14 2.5v5M14 20.5v5M2.5 14h5M20.5 14h5"/></g><circle cx="14" cy="14" r="2.4" fill="currentColor"/></symbol>
+  <symbol id="i-tower" viewBox="0 0 28 28"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 25 14 11.5 18.5 25M11 20.5h6"/><path d="M8.6 6.4a7.5 7.5 0 0 0 0 10.2M19.4 6.4a7.5 7.5 0 0 1 0 10.2M5.4 3.4a12 12 0 0 0 0 16.2M22.6 3.4a12 12 0 0 1 0 16.2"/></g><circle cx="14" cy="11.5" r="2.4" fill="currentColor"/></symbol>
+  <symbol id="i-bars" viewBox="0 0 28 28"><g fill="currentColor"><rect x="4" y="17" width="4" height="7" rx="1.5"/><rect x="10" y="12.5" width="4" height="11.5" rx="1.5"/><rect x="16" y="8" width="4" height="16" rx="1.5"/><rect x="22" y="3.5" width="4" height="20.5" rx="1.5" opacity=".35"/></g></symbol>
+  <symbol id="i-gear" viewBox="0 0 28 28"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h10M19 8h5M4 20h4M13 20h11"/><circle cx="16.5" cy="8" r="2.6"/><circle cx="10.5" cy="20" r="2.6"/></g></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 10.8v6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="7.6" r="1.25" fill="currentColor"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 8 13"><path d="M1.5 1.5 6.5 6.5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18.3 6.3a8.4 8.4 0 0 1 0 11.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5" fill="currentColor"/><path d="M8.2 10.5V8a3.8 3.8 0 0 1 7.6 0v2.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-loc" viewBox="0 0 24 24"><path d="M20.5 3.5 3.8 10.6l7 2.6 2.6 7z" fill="currentColor"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.2 22 20.5H2z" fill="currentColor"/><path d="M12 9.5v5" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.3" r="1.2" fill="#fff"/></symbol>
+  <symbol id="i-cw" viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.05-4.95" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M19.5 3.8v4.8h-4.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-ccw" viewBox="0 0 24 24"><g transform="matrix(-1 0 0 1 24 0)"><path d="M19 12a7 7 0 1 1-2.05-4.95" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M19.5 3.8v4.8h-4.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></g></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.5 12.3l3 3 6-6.6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="M3.5 6.2 9 4l6 2.2 5.5-2.2v13.8L15 20l-6-2.2-5.5 2.2z M9 4v13.8M15 6.2V20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+</svg>
+
+<!-- ===================== PUNTA ===================== -->
+<section class="view" id="v-punta" aria-label="Punta">
+  <div class="navbar"></div>
+  <div class="target-head">
+    <div class="tt">
+      <div class="eyebrow" id="tEyebrow">Bersaglio</div>
+      <div class="tname" id="tName">Nessun sito</div>
+      <div class="tsub num" id="tSub">Aggiungi un ripetitore da LTE Italy</div>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="readout" aria-live="off"><span class="deg" id="hdg">—</span><span class="card" id="hdgCard"></span></div>
+    <svg id="dial" viewBox="-185 -185 370 370" role="img" aria-label="Bussola di puntamento">
+      <circle class="d-bg" r="178"/>
+      <circle class="d-rim" r="178"/>
+      <path class="d-wedge" id="wedge" d=""/>
+      <g id="cardG"></g>
+      <path class="d-arc" id="arc" d=""/>
+      <path class="d-cross" d="M-26 0H26M0 -26V26"/>
+      <line class="d-lubber" x1="0" y1="-184" x2="0" y2="-146"/>
+    </svg>
+    <button class="guide primary" id="guide" type="button">Avvia sensori</button>
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><div class="k">Azimut sito</div><div class="v" id="kBear">—</div></div>
+    <div class="tile"><div class="k">Distanza</div><div class="v" id="kDist">—</div></div>
+    <div class="tile"><div class="k">Tilt sito</div><div class="v" id="kElev">—</div></div>
+    <div class="tile"><div class="k">Tilt attuale</div><div class="v" id="kTilt">—</div></div>
+  </div>
+  <div class="notice" id="interf" hidden><svg><use href="#i-warn"/></svg><div id="interfTxt"></div></div>
+
+  <div class="roundbtns">
+    <button class="rb" id="btnSound" aria-pressed="false" type="button"><span><svg><use href="#i-sound"/></svg></span>Suono</button>
+    <button class="rb" id="btnHold" aria-pressed="false" type="button"><span><svg><use href="#i-lock"/></svg></span>Blocca</button>
+    <button class="rb" id="btnBack" type="button" hidden><span><svg><use href="#i-tower"/></svg></span>Torna al sito</button>
+  </div>
+  <p class="gf" style="text-align:center;margin-top:18px" id="refNote">In piano: conta il bordo superiore. In verticale contro il pannello: conta il retro del telefono.</p>
+</section>
+
+<!-- ===================== SITI ===================== -->
+<section class="view" id="v-siti" aria-label="Siti">
+  <div class="navbar"><button class="navbtn" id="btnAdd" type="button" aria-label="Aggiungi sito"><svg><use href="#i-plus"/></svg></button></div>
+  <h1 class="largetitle">Siti</h1>
+  <div class="seg" role="tablist" id="siteSeg">
+    <button role="tab" aria-selected="true" data-seg="list" type="button">Elenco</button>
+    <button role="tab" aria-selected="false" data-seg="map" type="button">Mappa</button>
+  </div>
+  <div id="segList">
+    <div class="gh">Il tuo router</div>
+    <div class="group inset-icons">
+      <button class="row" id="rowPos" type="button">
+        <span class="ico" style="background:#007AFF"><svg><use href="#i-loc"/></svg></span>
+        <span class="k">Posizione</span><span class="v num" id="posVal">Non impostata</span><svg class="chev"><use href="#i-chev"/></svg>
+      </button>
+    </div>
+    <div class="gh">Ripetitori</div>
+    <div class="group" id="siteList"></div>
+    <p class="gf">Tocca un sito per puntarlo. Le coordinate le trovi nella scheda del sito su LTE Italy.</p>
+  </div>
+  <div id="segMap" hidden>
+    <div id="map" style="margin-top:10px"></div>
+    <p class="gf">Il punto arancio è il router. Tocca un sito per selezionarlo.</p>
+  </div>
+</section>
+
+<!-- ===================== SEGNALE ===================== -->
+<section class="view" id="v-segnale" aria-label="Segnale">
+  <div class="navbar"><button class="navbtn" id="btnClearLog" type="button">Svuota</button></div>
+  <h1 class="largetitle">Segnale</h1>
+  <div class="gh">Nuova lettura</div>
+  <div class="group">
+    <label class="row"><span class="k">Cell ID</span><input id="lCid" class="num" inputmode="text" autocomplete="off" placeholder="dalla pagina del router"></label>
+    <div class="row" id="cidRow" hidden><span class="verdict" id="cidVerdict"></span></div>
+    <label class="row"><span class="k">RSRP</span><input id="lRsrp" class="num" inputmode="decimal" placeholder="dBm"></label>
+    <label class="row"><span class="k">SINR</span><input id="lSinr" class="num" inputmode="decimal" placeholder="dB"></label>
+    <label class="row"><span class="k">RSRQ</span><input id="lRsrq" class="num" inputmode="decimal" placeholder="dB"></label>
+    <button class="row action" id="btnLog" type="button">Registra all'azimut attuale</button>
+  </div>
+  <p class="gf">Cell ID ÷ 256 = ID del sito (eNB). Così sai subito se il router è agganciato al ripetitore giusto.</p>
+  <div class="gh" id="logHead">Letture</div>
+  <div class="group" id="logList"></div>
+</section>
+
+<!-- ===================== IMPOSTAZIONI ===================== -->
+<section class="view" id="v-impo" aria-label="Impostazioni">
+  <div class="navbar"></div>
+  <h1 class="largetitle">Impostazioni</h1>
+  <div class="gh">Bussola</div>
+  <div class="group">
+    <label class="row"><span class="k">Declinazione magnetica</span><input id="setDecl" class="num" inputmode="decimal"></label>
+    <label class="row"><span class="k">Offset telefono</span><input id="setOff" class="num" inputmode="decimal" placeholder="0°"></label>
+    <label class="row"><span class="k">Tolleranza</span><input id="setTol" class="num" inputmode="decimal" placeholder="±3°"></label>
+  </div>
+  <p class="gf">La declinazione è calcolata in automatico per la tua zona: lascia vuoto per usarla. L'offset serve se il telefono non è allineato al pannello, per esempio 90 se lo appoggi sul fianco destro.</p>
+  <div class="gh">Installazione</div>
+  <div class="group">
+    <label class="row"><span class="k">Altezza router sul tetto</span><input id="setMast" class="num" inputmode="decimal" placeholder="1 m"></label>
+  </div>
+  <p class="gf">Serve per il tilt, insieme alla quota del tetto e del sito.</p>
+  <div class="gh">Dati</div>
+  <div class="group">
+    <button class="row action left" id="btnExport" type="button">Copia backup</button>
+    <button class="row action left" id="btnImport" type="button">Importa backup</button>
+  </div>
+  <p class="gf">I tuoi siti e le letture restano solo su questo telefono.</p>
+  <p class="gf" style="margin-top:28px;text-align:center">Mira · coordinate dei siti da <a href="https://lteitaly.it" target="_blank" rel="noopener" style="color:var(--tint)">LTE Italy</a> · mappa © OpenStreetMap</p>
+</section>
+
+<!-- ===================== BARRA SCHEDE ===================== -->
+<nav class="tabbar" aria-label="Sezioni"><div class="in" role="tablist">
+  <button class="tab" role="tab" data-tab="punta" type="button"><svg><use href="#i-target"/></svg>Punta</button>
+  <button class="tab" role="tab" data-tab="siti" type="button"><svg><use href="#i-tower"/></svg>Siti</button>
+  <button class="tab" role="tab" data-tab="segnale" type="button"><svg><use href="#i-bars"/></svg>Segnale</button>
+  <button class="tab" role="tab" data-tab="impo" type="button"><svg><use href="#i-gear"/></svg>Impostazioni</button>
+</div></nav>
+
+<!-- ===================== FOGLIO: SITO ===================== -->
+<dialog class="sheet" id="sheetSite" aria-labelledby="ssTitle">
+  <div class="grabber"></div>
+  <div class="sheet-h"><button class="navbtn" data-close type="button">Annulla</button><div class="ti" id="ssTitle">Nuovo sito</div><button class="navbtn" id="ssSave" type="button">Salva</button></div>
+  <div class="sheet-b">
+    <div class="gh">Coordinate</div>
+    <div class="group">
+      <div class="row"><textarea id="fPaste" rows="2" placeholder="Incolla coordinate o link, es. 42.9493, 12.3995" aria-label="Coordinate o link"></textarea></div>
+      <div class="row"><span class="verdict mid" id="fParsed">Accetta decimali, link di Google Maps e gradi° primi′ secondi″</span></div>
+    </div>
+    <div class="gh">Sito</div>
+    <div class="group">
+      <label class="row"><span class="k">ID sito (eNB)</span><input id="fEnb" class="num" inputmode="numeric" placeholder="58112"></label>
+      <label class="row"><span class="k">Nome</span><input id="fName" placeholder="facoltativo"></label>
+      <label class="row"><span class="k">Operatore</span><select id="fOp"><option>TIM</option><option>Vodafone</option><option>WindTre</option><option>Iliad</option><option>Fastweb</option><option>Altro</option></select></label>
+      <label class="row"><span class="k">Bande</span><input id="fBand" placeholder="es. 5G DSS, B3, B20"></label>
+    </div>
+    <div class="gh">Per il tilt (facoltativo)</div>
+    <div class="group">
+      <label class="row"><span class="k">Altezza antenne</span><input id="fH" class="num" inputmode="decimal" placeholder="30 m"></label>
+      <label class="row"><span class="k">Quota terreno</span><input id="fGround" class="num" inputmode="decimal" placeholder="m s.l.m."></label>
+      <label class="row"><span class="k">Azimut settore</span><input id="fSector" class="num" inputmode="decimal" placeholder="°"></label>
+    </div>
+    <div class="group" id="fDelWrap" style="margin-top:26px" hidden><button class="row destructive" id="fDel" type="button">Elimina sito</button></div>
+  </div>
+</dialog>
+
+<!-- ===================== FOGLIO: POSIZIONE ===================== -->
+<dialog class="sheet" id="sheetPos" aria-labelledby="spTitle">
+  <div class="grabber"></div>
+  <div class="sheet-h"><button class="navbtn" data-close type="button">Annulla</button><div class="ti" id="spTitle">Posizione router</div><button class="navbtn" id="spSave" type="button">Salva</button></div>
+  <div class="sheet-b">
+    <div class="gh">Sorgente</div>
+    <div class="seg" id="posSeg" role="tablist">
+      <button role="tab" data-mode="gps" aria-selected="true" type="button">GPS dal vivo</button>
+      <button role="tab" data-mode="saved" aria-selected="false" type="button">Posizione salvata</button>
+    </div>
+    <p class="gf" id="posHint">Usa il GPS del telefono mentre sei sul tetto.</p>
+    <div class="gh">Coordinate del tetto</div>
+    <div class="group">
+      <label class="row"><span class="k">Latitudine</span><input id="pLat" class="num" inputmode="decimal"></label>
+      <label class="row"><span class="k">Longitudine</span><input id="pLon" class="num" inputmode="decimal"></label>
+      <label class="row"><span class="k">Quota tetto</span><input id="pAlt" class="num" inputmode="decimal" placeholder="m s.l.m."></label>
+      <button class="row action left" id="pFromGps" type="button">Copia posizione GPS attuale</button>
+    </div>
+    <p class="gf" id="pGpsInfo">GPS non attivo.</p>
+  </div>
+</dialog>
+
+<!-- ===================== FOGLIO: BACKUP ===================== -->
+<dialog class="sheet" id="sheetBackup" aria-labelledby="sbTitle">
+  <div class="grabber"></div>
+  <div class="sheet-h"><button class="navbtn" data-close type="button">Chiudi</button><div class="ti" id="sbTitle">Backup</div><button class="navbtn" id="sbImport" type="button">Importa</button></div>
+  <div class="sheet-b">
+    <div class="gh">Dati</div>
+    <div class="group"><div class="row"><textarea id="bText" rows="8" aria-label="Backup"></textarea></div></div>
+    <p class="gf" id="bHint">Incolla un backup e tocca Importa.</p>
+  </div>
+</dialog>
+
+<div id="hud" role="status"><svg><use href="#i-ok"/></svg><span id="hudTxt"></span></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+"use strict";
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const R2D=180/Math.PI, D2R=Math.PI/180, EARTH=6371008.8, KEY="puntamento5g.v1";
+
+/* ================= stato ================= */
+const DEF={towers:[],selId:null,roof:null,posMode:"gps",settings:{decl:null,off:0,tol:3,mast:1},logs:{},tab:"punta"};
+let S=load();
+function load(){
+  try{const s=JSON.parse(localStorage.getItem(KEY));
+    if(s&&Array.isArray(s.towers)){const o=Object.assign(structuredClone(DEF),s);o.settings=Object.assign({},DEF.settings,s.settings);
+      o.towers.forEach(t=>{if(t.enb==null){const m=String(t.name||"").match(/\b(\d{4,7})\b/);if(m)t.enb=+m[1]}});return o}}catch(e){}
+  return structuredClone(DEF)}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+let live=null;                 // ultima posizione GPS
+let hdgMag=null, tiltNow=null, upright=false, compassOn=false, absOK=true;
+let hold=false, sound=false, customTarget=null, wasAligned=false;
+
+/* ================= geodesia ================= */
+const n360=a=>((a%360)+360)%360, n180=a=>{a=n360(a);return a>180?a-360:a};
+function bearing(a,b,c,d){const p1=a*D2R,p2=c*D2R,dl=(d-b)*D2R;return n360(Math.atan2(Math.sin(dl)*Math.cos(p2),Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl))*R2D)}
+function distance(a,b,c,d){const p1=a*D2R,p2=c*D2R,dp=(c-a)*D2R,dl=(d-b)*D2R;const h=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return 2*EARTH*Math.asin(Math.sqrt(h))}
+function autoDecl(p){return p?Math.round((1.3+.21*p.lon+.02*(p.lat-42))*10)/10:3.8}   // approssimazione WMM per l'Italia
+function decl(){return S.settings.decl==null?autoDecl(pos()):S.settings.decl}
+function pos(){
+  if(S.posMode==="saved"&&S.roof)return Object.assign({src:"saved"},S.roof);
+  if(live)return Object.assign({src:"gps"},live);
+  if(S.roof)return Object.assign({src:"saved"},S.roof);
+  return null}
+
+/* ================= formattazione ================= */
+const NF=(n,d=0)=>n.toLocaleString("it-IT",{minimumFractionDigits:d,maximumFractionDigits:d});
+const sgn=(n,d=1)=>(n<0?"−":"+")+NF(Math.abs(n),d);
+const minus=v=>v==null?"—":(v<0?"−"+NF(-v,v%1?1:0):NF(v,v%1?1:0));
+function km(m){return m>=1000?NF(m/1000,m<10000?2:1)+"<small>km</small>":NF(m)+"<small>m</small>"}
+function kmTxt(m){return m>=1000?NF(m/1000,m<10000?2:1)+" km":NF(m)+" m"}
+const CARD=["N","NE","E","SE","S","SO","O","NO"];
+const cardinal=a=>CARD[Math.round(n360(a)/45)%8];
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num=s=>{const v=parseFloat(String(s??"").replace(",",".").replace("−","-"));return isFinite(v)?v:undefined};
+const OPS={TIM:"TIM",Vodafone:"VF",WindTre:"W3",Iliad:"IL",Fastweb:"FW",Altro:"—"};
+function siteName(t){return t.name||(t.enb?"Sito "+t.enb:"Sito senza nome")}
+function setText(el,v){if(el._v!==v){el._v=v;el.textContent=v}}
+function setHTML(el,v){if(el._h!==v){el._h=v;el.innerHTML=v}}
+
+/* ================= lettura coordinate ================= */
+function parseCoords(txt){
+  if(!txt)return null; let t=txt.trim(); try{t=decodeURIComponent(t)}catch(e){}
+  let m;
+  const ql=t.match(/(?:^|[?&#,;\s])(?:lat|latitude)=(-?\d+(?:\.\d+)?)/i), qo=t.match(/(?:^|[?&#,;\s])(?:lon|lng|long|longitude)=(-?\d+(?:\.\d+)?)/i);
+  if(ql&&qo)return chk(+ql[1],+qo[1]);
+  if((m=t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)))return chk(+m[1],+m[2]);
+  if((m=t.match(/[?&](?:q|query|ll|center|destination)=(-?\d+\.\d+)[ ,+]+(-?\d+\.\d+)/)))return chk(+m[1],+m[2]);
+  if((m=t.match(/#map=\d+\/(-?\d+\.\d+)\/(-?\d+\.\d+)/)))return chk(+m[1],+m[2]);
+  const dms=[...t.matchAll(/(\d{1,3})\s*[°º]\s*(\d{1,2})?\s*['′’]?\s*(\d{1,2}(?:[.,]\d+)?)?\s*(?:["″”]|'')?\s*([NSEWO])/gi)];
+  if(dms.length>=2){const v=dms.slice(0,2).map(x=>{let d=+x[1]+(+(x[2]||0))/60+(+String(x[3]||0).replace(",","."))/3600;if(/[SWO]/i.test(x[4]))d=-d;return{d,ax:/[NS]/i.test(x[4])?"lat":"lon"}});
+    const la=v.find(x=>x.ax==="lat"),lo=v.find(x=>x.ax==="lon");if(la&&lo)return chk(la.d,lo.d)}
+  if((m=t.match(/(-?\d{1,2}\.\d{3,})\s*[,;\s/]\s*(-?\d{1,3}\.\d{3,})/)))return chk(+m[1],+m[2]);
+  if((m=t.match(/(-?\d{1,2},\d{3,})\s*[;\s/]\s*(-?\d{1,3},\d{3,})/)))return chk(+m[1].replace(",","."),+m[2].replace(",","."));
+  return null;
+  function chk(a,b){if(!isFinite(a)||!isFinite(b)||Math.abs(a)>90||Math.abs(b)>180)return null;if(a<20&&b>35&&b<48)[a,b]=[b,a];return{lat:a,lon:b}}
+}
+
+/* ================= sensori ================= */
+let watchId=null, wake=null;
+function startGps(){
+  if(!("geolocation" in navigator)){hud("Questo browser non ha il GPS",true);return}
+  if(watchId!=null)navigator.geolocation.clearWatch(watchId);
+  watchId=navigator.geolocation.watchPosition(p=>{
+    live={lat:p.coords.latitude,lon:p.coords.longitude,alt:p.coords.altitude,acc:p.coords.accuracy,ts:Date.now()};
+    renderStatic();
+  },e=>hud(e.code===1?"Consenti la posizione nelle impostazioni del browser":"GPS non disponibile: "+e.message,true),
+  {enableHighAccuracy:true,maximumAge:2000,timeout:25000});
+}
+async function startSensors(){
+  try{
+    if(typeof DeviceOrientationEvent!=="undefined"&&typeof DeviceOrientationEvent.requestPermission==="function"){
+      if(await DeviceOrientationEvent.requestPermission()!=="granted"){hud("Serve il permesso per i sensori di movimento",true);return}}
+  }catch(e){hud("Permesso sensori non concesso",true);return}
+  window.addEventListener("ondeviceorientationabsolute" in window?"deviceorientationabsolute":"deviceorientation",onOri,true);
+  compassOn=true; startGps();
+  try{wake=await navigator.wakeLock.request("screen")}catch(e){}
+  setTimeout(()=>{if(hdgMag==null)hud(window.isSecureContext?"Nessun dato dalla bussola su questo dispositivo":"Apri Mira in HTTPS per usare i sensori",true)},3000);
+}
+document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"&&wake){try{wake=await navigator.wakeLock.request("screen")}catch(e){}}});
+function onOri(e){
+  if(hold)return;
+  const b=(e.beta||0)*D2R, g=(e.gamma||0)*D2R; let h=null;
+  upright=Math.abs(e.beta||0)>50;
+  if(typeof e.webkitCompassHeading==="number"&&!isNaN(e.webkitCompassHeading)){h=e.webkitCompassHeading;absOK=true}
+  else if(e.alpha!=null&&(e.absolute||e.type==="deviceorientationabsolute")){
+    const a=e.alpha*D2R;
+    if(upright){ // direzione del retro del telefono
+      const r13=Math.cos(a)*Math.sin(g)+Math.sin(a)*Math.sin(b)*Math.cos(g), r23=Math.sin(a)*Math.sin(g)-Math.cos(a)*Math.sin(b)*Math.cos(g);
+      h=Math.atan2(-r13,-r23)*R2D;
+    }else h=360-e.alpha;
+    absOK=true;
+  }else{absOK=false;return}
+  if(!upright)h+=(screen.orientation&&screen.orientation.angle)||0;
+  tiltNow=upright?Math.asin(Math.max(-1,Math.min(1,-Math.cos(b)*Math.cos(g))))*R2D:null;
+  h=n360(h); hdgMag=hdgMag==null?h:n360(hdgMag+n180(h-hdgMag)*.22);
+}
+function routerTrue(){return hdgMag==null?null:n360(hdgMag+decl()+(+S.settings.off||0))}
+
+/* ================= bersaglio ================= */
+const selTower=()=>S.towers.find(t=>t.id===S.selId)||null;
+function target(){
+  const p=pos(), t=selTower();
+  if(!t||!p)return customTarget!=null?{bear:customTarget,dist:null,elev:null,custom:true}:null;
+  const d=distance(p.lat,p.lon,t.lat,t.lon), br=bearing(p.lat,p.lon,t.lat,t.lon);
+  let elev=null;
+  if(isFinite(t.ground)&&isFinite(p.alt)&&p.src==="saved"){
+    const hT=t.ground+(isFinite(t.h)?t.h:30), hR=p.alt+(+S.settings.mast||0);
+    elev=Math.atan2(hT-hR-d*d/(2*EARTH*4/3),d)*R2D;   // curvatura con rifrazione standard
+  }
+  return{bear:customTarget!=null?customTarget:br,dist:d,elev,custom:customTarget!=null};
+}
+
+/* ================= quadrante ================= */
+function buildDial(){
+  const R=170; let s="";
+  for(let i=0;i<360;i+=2){
+    const maj=i%30===0, mid=i%10===0, L=maj?17:mid?12:7;
+    s+=`<line class="${maj?"t-maj":mid?"t-mid":"t-min"}" x1="0" y1="${-R+2}" x2="0" y2="${-R+2+L}" transform="rotate(${i})"/>`;
+  }
+  for(let i=0;i<360;i+=30){
+    const card={0:"N",90:"E",180:"S",270:"O"}[i];
+    if(card)s+=`<text class="d-card" x="0" y="${-R+52}" text-anchor="middle" transform="rotate(${i})">${card}</text>`;
+    else s+=`<text class="d-num" x="0" y="${-R+38}" text-anchor="middle" transform="rotate(${i})">${i}</text>`;
+  }
+  s+=`<path class="d-north" d="M0 ${-R-4} l-7 -10 h14z" transform="translate(0 -1)"/>`;
+  s+=`<g id="tgtG" style="display:none"><circle class="d-tgt-halo" cx="0" cy="${-R+9}" r="14"/><circle class="d-tgt" cx="0" cy="${-R+9}" r="10.5"/><circle class="d-tgt-core" cx="0" cy="${-R+9}" r="3.6"/></g>`;
+  $("#cardG").innerHTML=s;
+}
+const polar=(r,a)=>[r*Math.sin(a*D2R),-r*Math.cos(a*D2R)];
+function arcPath(r,a0,a1){const[x0,y0]=polar(r,a0),[x1,y1]=polar(r,a1);return `M${x0.toFixed(1)} ${y0.toFixed(1)}A${r} ${r} 0 ${Math.abs(a1-a0)>180?1:0} ${a1>a0?1:0} ${x1.toFixed(1)} ${y1.toFixed(1)}`}
+
+/* ================= ciclo ================= */
+const els={};
+["hdg","hdgCard","guide","kBear","kDist","kElev","kTilt","arc","cardG","wedge","dial","interf","interfTxt","refNote"].forEach(id=>els[id]=document.getElementById(id));
+let lastErr=null;
+function tick(){
+  const tg=target(), rt=routerTrue(), tol=+S.settings.tol||3, t=selTower();
+  setText(els.hdg, rt==null?"—":Math.round(rt)+"°");
+  setText(els.hdgCard, rt==null?"":cardinal(rt));
+  if(rt!=null)els.cardG.setAttribute("transform",`rotate(${(-rt).toFixed(2)})`);
+  const tgG=document.getElementById("tgtG");
+  if(tg&&tgG){tgG.style.display="";tgG.setAttribute("transform",`rotate(${tg.bear.toFixed(2)})`)}else if(tgG)tgG.style.display="none";
+  // tolleranza intorno alla linea di fede
+  els.wedge.setAttribute("d",`M0 0L${polar(178,-tol).join(" ")}A178 178 0 0 1 ${polar(178,tol).join(" ")}Z`);
+
+  let err=null;
+  if(rt!=null&&tg){err=n180(tg.bear-rt);els.arc.setAttribute("d",Math.abs(err)>.4?arcPath(160,0,err):"")}else els.arc.setAttribute("d","");
+  lastErr=err;
+  const aligned=err!=null&&Math.abs(err)<=tol;
+  els.dial.classList.toggle("aligned",aligned);
+  if(aligned&&!wasAligned&&navigator.vibrate)navigator.vibrate([30,40,30]);
+  wasAligned=aligned;
+
+  // pulsante guida
+  const g=els.guide; let cls, html;
+  if(!compassOn){cls="guide primary";html="Avvia sensori"}
+  else if(!absOK){cls="guide";html="Bussola non disponibile"}
+  else if(!t&&customTarget==null){cls="guide link";html="Scegli un sito"}
+  else if(!pos()){cls="guide";html="In attesa della posizione…"}
+  else if(rt==null){cls="guide";html="Calibrazione bussola…"}
+  else if(aligned){cls="guide ok";html=`<svg><use href="#i-check"/></svg>Allineato`}
+  else{const a=Math.abs(err);cls="guide"+(a<=tol*3?" near":"");html=`<svg><use href="#i-${err>0?"cw":"ccw"}"/></svg>Ruota a ${err>0?"destra":"sinistra"} di ${NF(a,a<10?1:0)}°`}
+  if(g.className!==cls)g.className=cls; setHTML(g,html);
+
+  setHTML(els.kBear, tg?NF(tg.bear,1)+"°<small>"+cardinal(tg.bear)+"</small>":"—");
+  setHTML(els.kDist, tg&&tg.dist!=null?km(tg.dist):"—");
+  setHTML(els.kElev, tg&&tg.elev!=null?sgn(tg.elev)+"°":"—");
+  setHTML(els.kTilt, tiltNow!=null?sgn(tiltNow)+"°":(compassOn&&!upright?"<small>in piano</small>":"—"));
+  setText(els.refNote, compassOn&&hdgMag!=null?(upright?"Riferimento: retro del telefono, appoggiato in verticale al pannello.":"Riferimento: bordo superiore del telefono, appoggiato in piano sul router."):"In piano conta il bordo superiore del telefono. In verticale, contro il pannello, conta il retro.");
+  requestAnimationFrame(tick);
+}
+
+/* interferenze: altri siti vicini alla direzione del bersaglio */
+function renderInterf(){
+  const p=pos(), t=selTower();
+  if(!p||!t){els.interf.hidden=true;return}
+  const b0=bearing(p.lat,p.lon,t.lat,t.lon);
+  const others=S.towers.filter(x=>x.id!==t.id).map(x=>({x,sep:Math.abs(n180(bearing(p.lat,p.lon,x.lat,x.lon)-b0)),d:distance(p.lat,p.lon,x.lat,x.lon)})).sort((a,b)=>a.sep-b.sep);
+  if(!others.length){els.interf.hidden=true;return}
+  const o=others[0]; els.interf.hidden=false;
+  const sev=o.sep<25?"molto vicino alla stessa direzione: il puntamento da solo non basta, valuta il blocco di banda":o.sep<60?"abbastanza separato: punta con precisione e controlla il Cell ID":"ben separato: un buon puntamento dovrebbe bastare";
+  els.interf.querySelector("svg").style.color=o.sep<25?"var(--bad)":o.sep<60?"var(--warn)":"var(--good)";
+  els.interfTxt.innerHTML=`<b>${esc(siteName(o.x))}</b> è a ${NF(o.sep)}° dal bersaglio (${kmTxt(o.d)}): ${sev}.`;
+}
+
+/* ================= suono ================= */
+let ac=null,nextBeep=0;
+function beepLoop(){
+  if(sound&&ac&&lastErr!=null){
+    const now=ac.currentTime,a=Math.abs(lastErr),tol=+S.settings.tol||3;
+    if(now>=nextBeep){
+      const ok=a<=tol,o=ac.createOscillator(),g=ac.createGain();
+      o.type="sine";o.frequency.value=ok?1318.5:Math.max(330,1046-a*9);
+      g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(.18,now+.008);g.gain.exponentialRampToValueAtTime(.0001,now+(ok?.22:.07));
+      o.connect(g).connect(ac.destination);o.start(now);o.stop(now+.25);
+      nextBeep=now+(ok?.26:Math.min(1.1,.07+a/55));
+    }
+  }
+  setTimeout(beepLoop,35);
+}
+
+/* ================= schermate ================= */
+function showTab(name){
+  S.tab=name;save();
+  $$(".view").forEach(v=>v.classList.toggle("on",v.id==="v-"+name));
+  $$(".tab").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===name));
+  if(name==="siti"&&!$("#segMap").hidden)drawMap(true);
+  window.scrollTo(0,0);
+}
+function renderStatic(){
+  const t=selTower(), p=pos();
+  // intestazione Punta
+  if(customTarget!=null&&t){$("#tEyebrow").textContent="Azimut migliore registrato";$("#tName").textContent=NF(customTarget,1)+"°";$("#tSub").textContent=siteName(t)}
+  else if(t){$("#tEyebrow").innerHTML=`<span class="badge op-${esc(t.op)}" style="width:20px;height:20px;border-radius:5px;font-size:8px">${OPS[t.op]||"—"}</span>${esc(t.op)}`;
+    $("#tName").textContent=siteName(t);
+    $("#tSub").textContent=[t.band, p?kmTxt(distance(p.lat,p.lon,t.lat,t.lon)):"posizione router mancante"].filter(Boolean).join(" · ")}
+  else{$("#tEyebrow").textContent="Bersaglio";$("#tName").textContent="Nessun sito";$("#tSub").textContent=S.towers.length?"Scegli un ripetitore in Siti":"Aggiungi un ripetitore da LTE Italy"}
+  $("#btnBack").hidden=customTarget==null;
+  renderInterf();
+  // posizione
+  $("#posVal").textContent=!p?"Non impostata":p.src==="gps"?`GPS ±${NF(p.acc)} m`:"Salvata";
+  const gi=$("#pGpsInfo"); if(gi)gi.textContent=live?`GPS: ${NF(live.lat,6)}, ${NF(live.lon,6)} · precisione ±${NF(live.acc)} m`:"GPS non attivo: avvia i sensori dalla scheda Punta.";
+  $("#setDecl").placeholder="Auto "+NF(autoDecl(p),1)+"° E";
+  renderSites(); if(map&&!$("#segMap").hidden)drawMap(false);
+}
+
+/* ---------- elenco siti ---------- */
+function renderSites(){
+  const box=$("#siteList"), p=pos();
+  if(!S.towers.length){box.innerHTML=`<div class="empty"><svg><use href="#i-tower"/></svg><div class="h">Nessun sito</div><div class="p">Su LTE Italy copia le coordinate del ripetitore, poi tocca + per aggiungerlo.</div><button class="pillbtn" type="button" data-add>Aggiungi sito</button></div>`;
+    box.querySelector("[data-add]").onclick=()=>openSite();return}
+  const list=S.towers.map(t=>({t,d:p?distance(p.lat,p.lon,t.lat,t.lon):null,b:p?bearing(p.lat,p.lon,t.lat,t.lon):null})).sort((a,b)=>(a.d??1e12)-(b.d??1e12));
+  box.innerHTML=list.map(({t,d,b})=>{
+    let sect=""; if(isFinite(t.sector)&&b!=null){const off=Math.abs(n180(n360(b+180)-t.sector));sect=off<=60?" · nel settore":" · fuori settore"}
+    return `<div class="row site tap" data-id="${t.id}" role="button" tabindex="0">
+      <span class="badge op-${esc(t.op)}">${OPS[t.op]||"—"}</span>
+      <div class="txt"><div class="t">${esc(siteName(t))}</div><div class="s">${[d!=null?kmTxt(d):null,b!=null?NF(b)+"° "+cardinal(b):null,t.band?esc(t.band):null].filter(Boolean).join(" · ")}${sect}</div></div>
+      ${t.id===S.selId?`<svg class="check"><use href="#i-check"/></svg>`:""}
+      <button class="info" type="button" data-edit aria-label="Modifica ${esc(siteName(t))}"><svg><use href="#i-info"/></svg></button>
+    </div>`}).join("");
+  $$(".site",box).forEach(el=>{
+    const t=S.towers.find(x=>x.id===el.dataset.id);
+    el.addEventListener("click",ev=>{if(ev.target.closest("[data-edit]")){openSite(t);return}selectTower(t.id)});
+    el.addEventListener("keydown",ev=>{if(ev.key==="Enter")selectTower(t.id)});
+  });
+}
+function selectTower(id){S.selId=id;customTarget=null;save();renderStatic();renderLog();showTab("punta");hud("Bersaglio: "+siteName(selTower()))}
+
+/* ---------- foglio sito ---------- */
+let editId=null;
+function openSite(t){
+  editId=t?t.id:null;
+  $("#ssTitle").textContent=t?"Modifica sito":"Nuovo sito";
+  $("#fPaste").value=t?`${t.lat}, ${t.lon}`:""; $("#fEnb").value=t?.enb??""; $("#fName").value=t?.name??"";
+  $("#fOp").value=t?.op??"TIM"; $("#fBand").value=t?.band??""; $("#fH").value=t?.h??""; $("#fGround").value=t?.ground??""; $("#fSector").value=t?.sector??"";
+  $("#fDelWrap").hidden=!t; $("#fDel").textContent="Elimina sito"; delete $("#fDel").dataset.c;
+  showParsed(); $("#sheetSite").showModal();
+}
+function showParsed(){
+  const v=$("#fPaste").value, c=parseCoords(v), el=$("#fParsed");
+  el.className="verdict "+(c?"ok":v?"bad":"mid");
+  el.textContent=c?`${NF(c.lat,6)}, ${NF(c.lon,6)}`:v?"Coordinate non riconosciute":"Accetta decimali, link di Google Maps e gradi° primi′ secondi″";
+  if(!$("#fEnb").value){const m=v.match(/\b(\d{5})\b(?![.,]\d)/);if(m&&!c)$("#fEnb").value=m[1]}
+}
+$("#fPaste").addEventListener("input",showParsed);
+$("#ssSave").onclick=()=>{
+  const c=parseCoords($("#fPaste").value); if(!c){hud("Inserisci coordinate valide",true);$("#fPaste").focus();return}
+  const t={id:editId||Math.random().toString(36).slice(2,9),lat:c.lat,lon:c.lon,enb:num($("#fEnb").value),name:$("#fName").value.trim(),op:$("#fOp").value,
+    band:$("#fBand").value.trim(),h:num($("#fH").value),ground:num($("#fGround").value),sector:num($("#fSector").value)};
+  if(editId)S.towers=S.towers.map(x=>x.id===editId?t:x);else{S.towers.push(t);if(!S.selId)S.selId=t.id}
+  save();$("#sheetSite").close();renderStatic();renderLog();hud(editId?"Sito aggiornato":"Sito aggiunto");
+};
+$("#fDel").onclick=e=>{
+  const b=e.currentTarget; if(!b.dataset.c){b.dataset.c=1;b.textContent="Tocca di nuovo per eliminare";return}
+  S.towers=S.towers.filter(x=>x.id!==editId);delete S.logs[editId];if(S.selId===editId)S.selId=null;
+  save();$("#sheetSite").close();renderStatic();renderLog();hud("Sito eliminato");
+};
+
+/* ---------- foglio posizione ---------- */
+let posModeDraft="gps";
+function setPosSeg(m){posModeDraft=m;$$("#posSeg button").forEach(b=>b.setAttribute("aria-selected",b.dataset.mode===m));
+  $("#posHint").textContent=m==="gps"?"Usa il GPS del telefono mentre sei sul tetto. Le coordinate qui sotto restano come riserva.":"Usa sempre le coordinate salvate qui sotto, anche lontano dal tetto."}
+$("#rowPos").onclick=()=>{
+  const r=S.roof; $("#pLat").value=r?r.lat.toFixed(6):""; $("#pLon").value=r?r.lon.toFixed(6):""; $("#pAlt").value=r?.alt??"";
+  setPosSeg(S.posMode); renderStatic(); $("#sheetPos").showModal();
+};
+$$("#posSeg button").forEach(b=>b.onclick=()=>setPosSeg(b.dataset.mode));
+$("#pFromGps").onclick=()=>{
+  if(!live){hud("GPS non attivo: avvia i sensori dalla scheda Punta",true);return}
+  $("#pLat").value=live.lat.toFixed(6);$("#pLon").value=live.lon.toFixed(6);if(live.alt!=null&&!$("#pAlt").value)$("#pAlt").value=Math.round(live.alt);
+};
+["#pLat"].forEach(s=>$(s).addEventListener("paste",e=>{const c=parseCoords(e.clipboardData.getData("text"));if(c){e.preventDefault();$("#pLat").value=c.lat.toFixed(6);$("#pLon").value=c.lon.toFixed(6)}}));
+$("#spSave").onclick=()=>{
+  const lat=num($("#pLat").value), lon=num($("#pLon").value);
+  if(lat!=null&&lon!=null)S.roof={lat,lon,alt:num($("#pAlt").value)};
+  else if($("#pLat").value||$("#pLon").value){hud("Latitudine o longitudine non valida",true);return}
+  if(posModeDraft==="saved"&&!S.roof){hud("Inserisci prima le coordinate del tetto",true);return}
+  S.posMode=posModeDraft;save();$("#sheetPos").close();renderStatic();hud("Posizione aggiornata");
+};
+
+/* ---------- segnale ---------- */
+function parseCid(v){v=String(v||"").trim();if(!v)return null;let n;
+  if(/^0x/i.test(v)||/[a-f]/i.test(v))n=parseInt(v.replace(/^0x/i,""),16);else n=parseInt(v.replace(/\D/g,""),10);
+  return isFinite(n)&&n>0?{enb:Math.floor(n/256),sec:n%256}:null}
+function cidVerdict(c){
+  if(!c)return null; const t=selTower(), hit=S.towers.find(x=>x.enb===c.enb);
+  if(t&&t.enb===c.enb)return{cls:"ok",txt:`eNB ${c.enb} · cella ${c.sec}: sei sul sito giusto`};
+  if(hit)return{cls:"bad",txt:`eNB ${c.enb} · cella ${c.sec}: sei su ${siteName(hit)}${t?", non sul bersaglio":""}`};
+  return{cls:"mid",txt:`eNB ${c.enb} · cella ${c.sec}: sito non presente nell'elenco`};
+}
+$("#lCid").addEventListener("input",()=>{const v=cidVerdict(parseCid($("#lCid").value));$("#cidRow").hidden=!v;if(v){$("#cidVerdict").className="verdict "+v.cls;$("#cidVerdict").textContent=v.txt}});
+$("#btnLog").onclick=()=>{
+  if(!S.selId){hud("Scegli prima un sito",true);return}
+  const rt=routerTrue(); if(rt==null){hud("Avvia i sensori dalla scheda Punta",true);return}
+  const c=parseCid($("#lCid").value);
+  const r={hdg:Math.round(rt*10)/10,rsrp:num($("#lRsrp").value),sinr:num($("#lSinr").value),rsrq:num($("#lRsrq").value),enb:c?.enb,ts:Date.now()};
+  if(r.rsrp==null&&r.sinr==null){hud("Inserisci almeno RSRP o SINR",true);return}
+  (S.logs[S.selId]=S.logs[S.selId]||[]).push(r);save();renderLog();
+  ["#lRsrp","#lSinr","#lRsrq"].forEach(s=>$(s).value="");hud(`Registrato a ${NF(r.hdg,1)}°`);
+};
+function renderLog(){
+  const box=$("#logList"), t=selTower(), L=t?(S.logs[t.id]||[]):[];
+  $("#logHead").textContent=t?"Letture · "+siteName(t):"Letture";
+  if(!t){box.innerHTML=`<div class="empty"><svg><use href="#i-bars"/></svg><div class="h">Nessun bersaglio</div><div class="p">Scegli un sito per registrare il segnale.</div></div>`;return}
+  if(!L.length){box.innerHTML=`<div class="empty"><svg><use href="#i-bars"/></svg><div class="h">Nessuna lettura</div><div class="p">Ruota il router di pochi gradi alla volta, leggi i valori dal router e registrali qui.</div></div>`;return}
+  const score=r=>(r.sinr??-99)*1000+(r.rsrp??-200);
+  const sorted=[...L].sort((a,b)=>score(b)-score(a));
+  box.innerHTML=sorted.map((r,i)=>{
+    const wrong=r.enb!=null&&t.enb!=null&&r.enb!==t.enb;
+    return `<div class="row reading"><span class="az">${NF(r.hdg)}°</span>
+      <div class="vals"><div><span>SINR <b>${minus(r.sinr)}</b></span> · <span>RSRP <b>${minus(r.rsrp)}</b></span>${r.rsrq!=null?` · <span>RSRQ <b>${minus(r.rsrq)}</b></span>`:""}${i===0?'<span class="star">Migliore</span>':""}</div>
+      <div><span>${new Date(r.ts).toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"})}</span>${r.enb!=null?` · <span>eNB ${r.enb}</span>`:""}${wrong?' · <span style="color:var(--bad)">altro sito</span>':""}</div></div>
+      <button class="pillbtn" type="button" data-h="${r.hdg}">Punta</button></div>`}).join("");
+  $$("[data-h]",box).forEach(b=>b.onclick=()=>{customTarget=+b.dataset.h;renderStatic();showTab("punta")});
+}
+$("#btnClearLog").onclick=e=>{
+  const b=e.currentTarget; if(!S.selId||!(S.logs[S.selId]||[]).length)return;
+  if(!b.dataset.c){b.dataset.c=1;b.textContent="Conferma";setTimeout(()=>{delete b.dataset.c;b.textContent="Svuota"},3000);return}
+  S.logs[S.selId]=[];save();renderLog();delete b.dataset.c;b.textContent="Svuota";hud("Letture eliminate");
+};
+
+/* ---------- mappa ---------- */
+let map=null,layer=null;
+function drawMap(fit){
+  if(typeof L==="undefined"){$("#map").innerHTML='<div class="empty"><svg><use href="#i-map"/></svg><div class="h">Mappa non disponibile</div><div class="p">Serve la connessione a internet.</div></div>';return}
+  if(!map){map=L.map("map",{zoomControl:false,attributionControl:true}).setView([42.5,12.5],6);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);layer=L.layerGroup().addTo(map)}
+  setTimeout(()=>map.invalidateSize(),50);
+  layer.clearLayers(); const p=pos(), pts=[], cs=getComputedStyle(document.documentElement);
+  const tint=cs.getPropertyValue("--tint").trim(), tgt=cs.getPropertyValue("--target").trim();
+  if(p){L.circleMarker([p.lat,p.lon],{radius:9,color:"#fff",weight:3,fillColor:tint,fillOpacity:1}).bindTooltip("Router").addTo(layer);pts.push([p.lat,p.lon])}
+  for(const t of S.towers){const sel=t.id===S.selId;
+    if(sel&&p)L.polyline([[p.lat,p.lon],[t.lat,t.lon]],{color:tint,weight:3,dashArray:"2 7",lineCap:"round"}).addTo(layer);
+    L.circleMarker([t.lat,t.lon],{radius:sel?10:7,color:"#fff",weight:2.5,fillColor:sel?tgt:"#8E8E93",fillOpacity:1})
+      .bindTooltip(siteName(t)+" · "+t.op).on("click",()=>selectTower(t.id)).addTo(layer);
+    pts.push([t.lat,t.lon])}
+  if(fit&&pts.length)map.fitBounds(pts,{padding:[36,36],maxZoom:15});
+}
+$$("#siteSeg button").forEach(b=>b.onclick=()=>{
+  $$("#siteSeg button").forEach(x=>x.setAttribute("aria-selected",x===b));
+  const m=b.dataset.seg==="map"; $("#segMap").hidden=!m; $("#segList").hidden=m; if(m)drawMap(true);
+});
+
+/* ---------- impostazioni ---------- */
+function initSettings(){
+  $("#setDecl").value=S.settings.decl??""; $("#setOff").value=S.settings.off||""; $("#setTol").value=S.settings.tol!==3?S.settings.tol:""; $("#setMast").value=S.settings.mast!==1?S.settings.mast:"";
+}
+$("#setDecl").addEventListener("change",e=>{S.settings.decl=e.target.value===""?null:num(e.target.value)??null;save()});
+$("#setOff").addEventListener("change",e=>{S.settings.off=num(e.target.value)||0;save()});
+$("#setTol").addEventListener("change",e=>{S.settings.tol=Math.max(.5,num(e.target.value)||3);save()});
+$("#setMast").addEventListener("change",e=>{S.settings.mast=num(e.target.value)??1;save()});
+$("#btnExport").onclick=async()=>{
+  const txt=JSON.stringify({towers:S.towers,roof:S.roof,posMode:S.posMode,settings:S.settings,logs:S.logs});
+  $("#bText").value=txt;$("#bHint").textContent="Backup pronto. Conservalo in Note o inviatelo per messaggio.";$("#sheetBackup").showModal();
+  try{await navigator.clipboard.writeText(txt);hud("Backup copiato")}catch(e){$("#bText").select()}
+};
+$("#btnImport").onclick=()=>{$("#bText").value="";$("#bHint").textContent="Incolla un backup e tocca Importa.";$("#sheetBackup").showModal();setTimeout(()=>$("#bText").focus(),300)};
+$("#sbImport").onclick=()=>{
+  try{const d=JSON.parse($("#bText").value);if(!Array.isArray(d.towers))throw 0;
+    S=Object.assign(structuredClone(DEF),d,{settings:Object.assign({},DEF.settings,d.settings),tab:S.tab});save();initSettings();renderStatic();renderLog();
+    $("#sheetBackup").close();hud("Backup importato")}catch(e){hud("Il testo incollato non è un backup di Mira",true)}
+};
+
+/* ---------- comandi Punta ---------- */
+$("#guide").onclick=()=>{if(!compassOn)startSensors();else if(!selTower()&&customTarget==null)showTab("siti")};
+$("#btnSound").onclick=e=>{sound=!sound;if(sound&&!ac){try{ac=new(window.AudioContext||window.webkitAudioContext)()}catch(x){}}if(ac&&ac.state==="suspended")ac.resume();e.currentTarget.setAttribute("aria-pressed",sound)};
+$("#btnHold").onclick=e=>{hold=!hold;e.currentTarget.setAttribute("aria-pressed",hold);e.currentTarget.lastChild.textContent=hold?"Bloccato":"Blocca"};
+$("#btnBack").onclick=()=>{customTarget=null;renderStatic()};
+$("#btnAdd").onclick=()=>openSite();
+$$(".tab").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+$$("dialog [data-close]").forEach(b=>b.onclick=()=>b.closest("dialog").close());
+$$("dialog.sheet").forEach(d=>d.addEventListener("click",e=>{if(e.target===d)d.close()}));
+
+/* ---------- notifica ---------- */
+let hudT;function hud(m,warn){const h=$("#hud");$("#hudTxt").textContent=m;h.querySelector("svg").innerHTML=`<use href="#i-${warn?"warn":"ok"}"/>`;
+  h.querySelector("svg").style.color=warn?"var(--warn)":"var(--good)";h.classList.add("show");clearTimeout(hudT);hudT=setTimeout(()=>h.classList.remove("show"),2600)}
+
+/* ---------- avvio ---------- */
+buildDial(); initSettings(); renderStatic(); renderLog(); showTab(S.tab||"punta");
+requestAnimationFrame(tick); beepLoop();
+if(!window.isSecureContext)setTimeout(()=>hud("Apri Mira in HTTPS per usare GPS e bussola",true),800);
+</script>
+</body>
+</html>
